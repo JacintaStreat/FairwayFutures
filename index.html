@@ -1,3 +1,4 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Fairway Futures</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -275,6 +276,24 @@
   .cta-panel .lede{color:rgba(33,30,31,0.78);}
   .contact-line{margin-top:1.3rem; font-size:0.92rem; color:var(--fairway-700);}
 
+  .contact-form{margin-top:1.7rem; text-align:left; display:grid; gap:0.95rem;}
+  .contact-form .field{display:flex; flex-direction:column; gap:0.35rem;}
+  .contact-form label{font-size:0.82rem; font-weight:700; color:var(--fairway-800);}
+  .contact-form input, .contact-form textarea{
+    font:inherit; font-family:"Carlito", sans-serif; font-size:0.95rem;
+    padding:0.65rem 0.8rem; border:1px solid var(--line-on-light); border-radius:4px;
+    background:#fff; color:var(--ink);
+  }
+  .contact-form input:focus, .contact-form textarea:focus{outline:2px solid var(--brass-500); outline-offset:1px;}
+  .contact-form textarea{min-height:110px; resize:vertical;}
+  .contact-form .hp-field{position:absolute; left:-9999px; top:-9999px; width:1px; height:1px; overflow:hidden;}
+  .contact-form .form-actions{display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-top:0.2rem;}
+  .contact-form button[disabled]{opacity:0.6; cursor:not-allowed; transform:none;}
+  .form-status{font-size:0.88rem; margin:0;}
+  .form-status.is-error{color:#9a2a2a;}
+  .form-status.is-success{color:var(--fairway-700);}
+  .contact-alt{margin-top:1.6rem; padding-top:1.4rem; border-top:1px solid var(--line-on-light); font-size:0.88rem; color:rgba(33,30,31,0.7);}
+
   /* ---------- footer ---------- */
   footer{background:var(--fairway-950); color:rgba(255,255,255,0.75); padding:2.6rem 0 2rem;}
   #scroll-spacer{background:var(--fairway-950);}
@@ -440,8 +459,44 @@
       <div class="cta-panel">
         <span class="eyebrow on-light">Get Started</span>
         <h2>Ready for your Fairway Future?</h2>
-        <p class="lede">Get in touch by email or phone.</p>
-        <p class="contact-line">hello@fairwayfutures.com.au<br>Dave (College Contact): <a href="tel:+61428975365">+61 428 975 365</a> &nbsp;&middot;&nbsp; Kane (Player Contact): <a href="tel:+61455031552">+61 455 031 552</a></p>
+        <p class="lede">Tell us a bit about yourself and we&rsquo;ll be in touch.</p>
+
+        <form class="contact-form" id="contact-form" novalidate>
+          <div class="field">
+            <label for="cf-name">Name</label>
+            <input type="text" id="cf-name" name="name" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label for="cf-email">Email</label>
+            <input type="email" id="cf-email" name="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="cf-phone">Phone (optional)</label>
+            <input type="tel" id="cf-phone" name="phone" autocomplete="tel">
+          </div>
+          <div class="field">
+            <label for="cf-handicap">Current GA Handicap (optional)</label>
+            <input type="text" id="cf-handicap" name="handicap" placeholder="e.g. 5.4">
+          </div>
+          <div class="field">
+            <label for="cf-grad-year">Year of Year 12 Graduation (optional)</label>
+            <input type="text" id="cf-grad-year" name="gradYear" placeholder="e.g. 2027" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label for="cf-message">Message</label>
+            <textarea id="cf-message" name="message" required></textarea>
+          </div>
+          <div class="hp-field" aria-hidden="true">
+            <label for="cf-website">Website</label>
+            <input type="text" id="cf-website" name="website" tabindex="-1" autocomplete="off">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Send Message</button>
+            <p class="form-status" id="cf-status" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+
+        <p class="contact-alt">Prefer email or phone?<br>hello@fairwayfutures.com.au<br>Dave (College Contact): <a href="tel:+61428975365">+61 428 975 365</a> &nbsp;&middot;&nbsp; Kane (Player Contact): <a href="tel:+61455031552">+61 455 031 552</a></p>
       </div>
     </div>
   </section>
@@ -497,4 +552,75 @@
     sizeSpacer();
     window.addEventListener('resize', sizeSpacer);
   }
+
+  // Contact form submission -> Cloudflare Worker -> Resend
+  (function () {
+    var form = document.getElementById('contact-form');
+    if (!form) return;
+
+    // TODO: replace with your deployed Worker URL once it's live
+    // (e.g. https://fairway-futures-contact.<your-subdomain>.workers.dev)
+    var ENDPOINT = 'https://fairway-futures-contact.fairwayfutures.workers.dev';
+
+    var tsField = document.createElement('input');
+    tsField.type = 'hidden';
+    tsField.name = 'ts';
+    tsField.value = String(Date.now());
+    form.appendChild(tsField);
+
+    var statusEl = document.getElementById('cf-status');
+    var submitBtn = form.querySelector('button[type="submit"]');
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      var payload = {
+        name: form.name.value,
+        email: form.email.value,
+        phone: form.phone.value,
+        handicap: form.handicap.value,
+        gradYear: form.gradYear.value,
+        message: form.message.value,
+        website: form.website.value,
+        ts: tsField.value,
+      };
+
+      statusEl.textContent = '';
+      statusEl.className = 'form-status';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending…';
+
+      fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok && data.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (result.ok) {
+            form.reset();
+            tsField.value = String(Date.now());
+            statusEl.textContent = "Thanks — we'll be in touch soon.";
+            statusEl.className = 'form-status is-success';
+          } else {
+            statusEl.textContent = (result.data && result.data.error) || 'Something went wrong. Please try again or email us directly.';
+            statusEl.className = 'form-status is-error';
+          }
+        })
+        .catch(function () {
+          statusEl.textContent = "Couldn't send — please check your connection or email us directly.";
+          statusEl.className = 'form-status is-error';
+        })
+        .finally(function () {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Send Message';
+        });
+    });
+  })();
 </script>
+
+</body></html>
